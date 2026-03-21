@@ -328,7 +328,7 @@ func decodeStreamObject(t *testing.T, buf *bytes.Buffer, stream *model.StreamObj
 
 	// Read objects until we find our stream
 	var decodedStream *model.StreamObject
-	var err = decoder.Parse(func(obj model.RedisObject) bool {
+	err := decoder.Parse(func(obj model.RedisObject) bool {
 		if streamObj, ok := obj.(*model.StreamObject); ok && streamObj.GetKey() == "astream" {
 			decodedStream = streamObj
 			return false // stop parsing

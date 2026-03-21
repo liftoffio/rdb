@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -223,7 +224,7 @@ func (dec *Decoder) readStreamGroups(version uint) ([]*model.StreamGroup, error)
 	}
 	groups := make([]*model.StreamGroup, 0, int(groupCount))
 	for i := uint64(0); i < groupCount; i++ {
-		name, _ := dec.readString()
+		name, err := dec.readString()
 		if err != nil {
 			return nil, err
 		}
@@ -349,6 +350,8 @@ func (enc *Encoder) WriteStreamObject(key string, stream *model.StreamObject, op
 		streamType = typeStreamListPacks2
 	case 3:
 		streamType = typeStreamListPacks3
+	case 4:
+		return errors.New("stream version 4 is not supported")
 	default:
 		streamType = typeStreamListPacks // default to version 1
 	}

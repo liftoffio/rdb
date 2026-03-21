@@ -50,20 +50,23 @@ var magicNumber = []byte("REDIS")
 
 const (
 	minVersion = 1
-	maxVersion = 12
+	maxVersion = 13
 )
 
 const (
-	opCodeFunction     = 245
-	opCodeModuleAux    = 247 /* Module auxiliary data. */
-	opCodeIdle         = 248 /* LRU idle time. */
-	opCodeFreq         = 249 /* LFU frequency. */
-	opCodeAux          = 250 /* RDB aux field. */
-	opCodeResizeDB     = 251 /* Hash table resize hint. */
-	opCodeExpireTimeMs = 252 /* Expire time in milliseconds. */
-	opCodeExpireTime   = 253 /* Old expire time in seconds. */
-	opCodeSelectDB     = 254 /* DB number of the following keys. */
-	opCodeEOF          = 255
+	opCodeKeyMeta       = 243 /* Key metadata (RDB 13). */
+	opCodeSlotInfo      = 244 /* Slot info for cluster mode (RDB 12+). */
+	opCodeFunction      = 245 /* Function library (aka FUNCTION2). */
+	opCodeFunctionPreGA = 246 /* Pre-release function format (unsupported). */
+	opCodeModuleAux     = 247 /* Module auxiliary data. */
+	opCodeIdle          = 248 /* LRU idle time. */
+	opCodeFreq          = 249 /* LFU frequency. */
+	opCodeAux           = 250 /* RDB aux field. */
+	opCodeResizeDB      = 251 /* Hash table resize hint. */
+	opCodeExpireTimeMs  = 252 /* Expire time in milliseconds. */
+	opCodeExpireTime    = 253 /* Old expire time in seconds. */
+	opCodeSelectDB      = 254 /* DB number of the following keys. */
+	opCodeEOF           = 255
 )
 
 const (
@@ -93,6 +96,7 @@ const (
 	typeHashListPackWithHfeRc // rdb 12 (only redis 7.4 rc)
 	typeHashWithHfe           // since rdb 12 (redis 7.4)
 	typeHashListPackWithHfe   // since rdb 12 (redis 7.4)
+	typeStreamListPacks4      // since rdb 13 (redis 8.6)
 )
 
 const (
@@ -124,6 +128,7 @@ var encodingMap = map[int]string{
 	typeHashListPackWithHfeRc: model.ListPackExEncoding,
 	typeHashWithHfe:           model.HashExEncoding,
 	typeHashListPackWithHfe:   model.ListPackExEncoding,
+	typeStreamListPacks4:      model.ListPackEncoding,
 }
 
 // checkHeader checks whether input has valid RDB file header
@@ -294,12 +299,14 @@ func (dec *Decoder) readObject(flag byte, base *model.BaseObject) (model.RedisOb
 			BaseObject: base,
 			Entries:    entries,
 		}, nil
-	case typeStreamListPacks, typeStreamListPacks2, typeStreamListPacks3:
+	case typeStreamListPacks, typeStreamListPacks2, typeStreamListPacks3, typeStreamListPacks4:
 		var version uint = 1
 		if flag == typeStreamListPacks2 {
 			version = 2
 		} else if flag == typeStreamListPacks3 {
 			version = 3
+		} else if flag == typeStreamListPacks4 {
+			return nil, errors.New("stream list packs 4 (RDB_TYPE_STREAM_LISTPACKS_4) is not supported")
 		}
 		stream, err := dec.readStreamListPacks(version)
 		if err != nil {
@@ -466,6 +473,12 @@ func (dec *Decoder) parse(cb func(object model.RedisObject) bool) error {
 				}
 			}
 			continue
+		} else if b == opCodeSlotInfo {
+			return errors.New("slot info (RDB_OPCODE_SLOT_INFO) is not supported")
+		} else if b == opCodeFunctionPreGA {
+			return errors.New("pre-release function format (RDB_OPCODE_FUNCTION_PRE_GA) is not supported")
+		} else if b == opCodeKeyMeta {
+			return errors.New("key metadata for modules (RDB_OPCODE_KEY_META) is not supported")
 		}
 		key, err := dec.readString()
 		if err != nil {
